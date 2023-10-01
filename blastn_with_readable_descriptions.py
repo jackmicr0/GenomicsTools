@@ -17,7 +17,6 @@ argParser.add_argument("-f", "--fasta", type=str, help="Fasta file of sequences 
 argParser.add_argument("-db", "--database", type=str, help="path to local database (incl prefix of database files)")
 argParser.add_argument("-o", "--output_csv", type=str, help="output file name with extension")
 argParser.add_argument("-e", "--email", type=str, help="email for ncbi tools")
-argParser.add_argument("-n", "--number", type=int, help="Number of targets to be returned in output csv")
 
 argcomplete.autocomplete(argParser)
 
@@ -42,7 +41,6 @@ def retrieve_record(accession): # Function to retrieve records from NCBI using a
 #db_prefix =sys.argv[2] ### db_prefix needs to be complete path to blast db - incl prefix for db files
 #output_csv = sys.argv[3] 
 #email = sys.argv[4]
-#number_of_targets = sys.argv[5]
 
 Entrez.email=args.email
 
@@ -53,7 +51,7 @@ blast_command = [
     "-query", args.fasta,     # Input FASTA file
     "-outfmt", "6",           # Output format (CSV)
     "-out", args.output_csv, # Output CSV file
-    "-max_target_seqs", args.numbers
+    "-max_target_seqs", "5" ## 5 top blast hits 
 ]
 
 # Run the BLASTn command using subprocess
