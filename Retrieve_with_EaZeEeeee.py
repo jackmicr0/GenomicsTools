@@ -11,7 +11,7 @@ import pandas as pd
 import re
 import argparse
 
-### get lovely accessions, sequences and metadata for your perusal.. 
+### get accessions, sequences and metadata for your perusal.. 
 
 argParser = argparse.ArgumentParser(description="Retrieve metadata and sequences with EAZEEeeeeeEEEEE - Use search query as you would if on NCBI directly and get sequences and metadata for that search")
 argParser.add_argument("-q","--query_search", type=str, help="Query search for finding genomes e.g. SARS AND CoV NOT bacteria NOT unverified", nargs="+")
@@ -125,11 +125,11 @@ for record in records:
                     feature.qualifiers["isolate"][0]
                 else:                     
                     feature_info["isolate"] = float('nan')                 
-                if "country" in feature.qualifiers:                     
-                    feature_info["country"] = \
-                    feature.qualifiers["country"][0]
+                if "geo_loc_name" in feature.qualifiers:                     
+                    feature_info["geo_loc_name"] = \
+                    feature.qualifiers["geo_loc_name"][0]
                 else:                  
-                    feature_info["country"] = float('nan') 
+                    feature_info["geo_loc_name"] = float('nan') 
                 if "host" in feature.qualifiers:       
                         feature_info["host"] = \
                         feature.qualifiers["host"][0]
@@ -165,27 +165,27 @@ df_features.set_index("Accession", inplace=True)
 
 merge = pd.merge(df_unfiltered, df_cds, right_index=True, left_index=True).merge(df_features, right_index=True, left_index=True)
 
-merge = merge.applymap(lambda x: x.strip() if isinstance(x, str) else x)
-merge = merge.applymap(lambda x: re.sub(r'[-/()|.:;""'' ]', '_', x) if isinstance(x, str) else x)
-merge = merge.applymap(lambda x: x.replace("__", "_") if isinstance(x, str) else x)
-merge = merge.applymap(lambda x: x.replace('""', "") if isinstance(x, str) else x)
-merge = merge.applymap(lambda x: x.rstrip("_") if isinstance(x, str) else x)
-merge = merge.applymap(lambda x: x.lstrip("_") if isinstance(x, str) else x)
+merge = merge.apply(lambda col: col.map(lambda x: x.strip() if isinstance(x, str) else x))
+merge = merge.apply(lambda col: col.map(lambda x: re.sub(r'[-/()|.:;""'' ]', '_', x) if isinstance(x, str) else x))
+merge = merge.apply(lambda col: col.map(lambda x: x.replace("__", "_") if isinstance(x, str) else x))
+merge = merge.apply(lambda col: col.map(lambda x: x.replace('""', "") if isinstance(x, str) else x))
+merge = merge.apply(lambda col: col.map(lambda x: x.rstrip("_") if isinstance(x, str) else x))
+merge = merge.apply(lambda col: col.map(lambda x: x.lstrip("_") if isinstance(x, str) else x))
 
-merge["isolation_source"] = merge["isolation_source"].replace(np.NaN, 'NoIsolationSource')
-merge["collection_date"] = merge["collection_date"].replace(np.NaN, 'NoCollectionDate')
-merge["isolate"] = merge["isolate"].replace(np.NaN, 'NoIsolate')
-merge["country"] = merge["country"].replace(np.NaN, 'NoCountry')
-merge["host"] = merge["host"].replace(np.NaN, 'NoHost')
-merge["mol_type"] = merge["mol_type"].replace(np.NaN, 'NoMolType')
-merge["start"] = merge["start"].replace(np.NaN, 'NoStartCoordinate')
-merge["end"] = merge["end"].replace(np.NaN, 'NoEndCoordinate')
-merge["segment"] = merge["segment"].replace(np.NaN, 'NoSegmentOrNotSegmented')
+merge["isolation_source"] = merge["isolation_source"].replace(np.nan, 'NoIsolationSource')
+merge["collection_date"] = merge["collection_date"].replace(np.nan, 'NoCollectionDate')
+merge["isolate"] = merge["isolate"].replace(np.nan, 'NoIsolate')
+merge["geo_loc_name"] = merge["geo_loc_name"].replace(np.nan, 'NoCountry')
+merge["host"] = merge["host"].replace(np.nan, 'NoHost')
+merge["mol_type"] = merge["mol_type"].replace(np.nan, 'NoMolType')
+merge["start"] = merge["start"].replace(np.nan, 'NoStartCoordinate')
+merge["end"] = merge["end"].replace(np.nan, 'NoEndCoordinate')
+merge["segment"] = merge["segment"].replace(np.nan, 'NoSegmentOrNotSegmented')
 
 merge["FastaID"]=merge.index + "|" + merge["isolate"] + "|" + merge[
     "host"] + "|" + merge[
     "isolation_source"] + "|" + merge[
-    "country"] + "|" + merge[
+    "geo_loc_name"] + "|" + merge[
     "segment"] + "|" + merge[
     "collection_date"
 ]
