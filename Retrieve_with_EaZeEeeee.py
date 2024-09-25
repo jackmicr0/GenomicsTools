@@ -26,7 +26,7 @@ args = argParser.parse_args() ### define args
 query_words = args.query_search
 query = " ".join(query_words)
 
-### functions
+### functions for running script 
 
 def get_accessions(search_query):
     
@@ -44,167 +44,125 @@ def get_accessions(search_query):
         return acc_ids
     else:
         return []
-
-search_query = query
-
-accessions_out = get_accessions(search_query)
-accessions_out_noduplicates=list(set(accessions_out)) ## no duplicates 
-accessions_for_retrieval = accessions_out_noduplicates
-
-
-### get cds start and end and metadata for each accession 
-
-records = [] ## empty list for saving records 
-df=pd.DataFrame() ## start empty df 
-for accession in accessions_out_noduplicates: ## loop accessions - get fasta 
-    handle = Entrez.efetch(db="nucleotide",\
-                           id=accession,\
-                           rettype="fasta")
     
-    record = SeqIO.read(handle, "fasta") # get sequence 
+def fetch_sequences(accessions):
+    records = []
+    for accession in accessions:
+        handle = Entrez.efetch(db="nucleotide", id=accession, rettype="fasta")
+        record = SeqIO.read(handle, "fasta")
+        records.append(record)
+        handle.close()
+    return records
+
+def create_sequence_dataframe(records):
+    df = pd.DataFrame({
+        'Accession': [record.id for record in records],
+        'Description': [record.description for record in records],
+        'Sequence': [str(record.seq) for record in records]
+    })
+    df['Corrected_accession'] = df['Accession'].str.split('.').str[0]
+    return df[['Accession', 'Description', 'Sequence', 'Corrected_accession']]
+
+def fetch_cds_and_metadata(accessions):
+    cds_list = []
+    feature_list = []
+    handle = Entrez.efetch(db="nucleotide", id=accessions, rettype="gb", retmode="text")
+    records = SeqIO.parse(handle, "genbank")
     
-    records.append(record)
-
+    for record in records:
+        accession = record.name
+        for feature in record.features:
+            if feature.type == "CDS":
+                cds_list.append({
+                    'Accession': accession,
+                    'start': feature.location.start,
+                    'end': feature.location.end,
+                    'strand': feature.location.strand
+                })
+            if feature.type == "source":
+                feature_info = {
+                    'Accession': accession,
+                    'isolation_source': feature.qualifiers.get('isolation_source', [np.nan])[0],
+                    'isolate': feature.qualifiers.get('isolate', [np.nan])[0],
+                    'geo_loc_name': feature.qualifiers.get('geo_loc_name', [np.nan])[0],
+                    'host': feature.qualifiers.get('host', [np.nan])[0],
+                    'segment': feature.qualifiers.get('segment', [np.nan])[0],
+                    'mol_type': feature.qualifiers.get('mol_type', [np.nan])[0],
+                    'collection_date': feature.qualifiers.get('collection_date', [np.nan])[0]
+                }
+                feature_list.append(feature_info)
     
-df['Accession'] = [record.id for record in records]
-df['Description'] = [record.description for record in records]
-df['Sequence'] = [str(record.seq) for record in records]
-df_unfiltered=df[['Accession','Description','Sequence']]
-df_unfiltered['Corrected_accession']=df_unfiltered['Accession'].str.split(".").str[0] 
-
-################## METADATA
-
-cds_list=[] ## initiate end list 
-
-
-handle = Entrez.efetch(db="nucleotide",\
-                      id=accessions_for_retrieval,\
-                      rettype="gb",\
-                      retmode="text")
-
-records = SeqIO.parse(handle, "genbank")
-
-for record in records:
-   
-    for feature in record.features:
-        
-        if feature.type == "CDS":
-            cds = {} 
-            cds["Accession"] = record.name         
-            cds["start"] = feature.location.start                 
-            cds["end"] = feature.location.end
-            cds["strand"] = feature.location.strand
-                
-            cds_list.append(cds)   
-                
-handle.close()
-
-df_cds = pd.DataFrame(cds_list) ## df with start and end coordinates 
-
-feature_list=[]
-handle = Entrez.efetch(db="nucleotide",\
-                      id=accessions_for_retrieval,\
-                      rettype="gb",\
-                      retmode="text")
-records = SeqIO.parse(handle, "genbank")
-
-for record in records:   
-    for feature in record.features:
-        
-        if feature.type == "source":                 
-                feature_info = {}                 
-                feature_info["Accession"] = record.name                 
-                if "isolation_source" in feature.qualifiers: 
-                    feature_info["isolation_source"] = \
-                    feature.qualifiers["isolation_source"][0]                 
-                else:                     
-                    feature_info["isolation_source"] = float('nan')
-                
-                if "isolate" in feature.qualifiers:                     
-                    feature_info["isolate"] = \
-                    feature.qualifiers["isolate"][0]
-                else:                     
-                    feature_info["isolate"] = float('nan')                 
-                if "geo_loc_name" in feature.qualifiers:                     
-                    feature_info["geo_loc_name"] = \
-                    feature.qualifiers["geo_loc_name"][0]
-                else:                  
-                    feature_info["geo_loc_name"] = float('nan') 
-                if "host" in feature.qualifiers:       
-                        feature_info["host"] = \
-                        feature.qualifiers["host"][0]
-                else:                     
-                    feature_info["host"] = float('nan')   
-                if "segment" in feature.qualifiers: 
-                    feature_info["segment"] = \
-                    feature.qualifiers["segment"][0]   
-                else:                   
-                    feature_info["segment"] = float('nan') 
-                if "mol_type" in feature.qualifiers:       
-                        feature_info["mol_type"] = \
-                        feature.qualifiers["mol_type"][0]
-                else:                     
-                    feature_info["mol_type"] = float('nan')
-                if "collection_date" in feature.qualifiers:       
-                        feature_info["collection_date"] = \
-                        feature.qualifiers["collection_date"][0]
-                else:                     
-                    feature_info["host"] = float('nan')
-                 
-                
-                feature_list.append(feature_info)    
-                
-handle.close()
-
-df_features = pd.DataFrame(feature_list) 
-
-df_unfiltered.set_index("Corrected_accession",inplace=True)
-
-df_cds.set_index("Accession", inplace=True)
-df_features.set_index("Accession", inplace=True)
-
-merge = pd.merge(df_unfiltered, df_cds, right_index=True, left_index=True).merge(df_features, right_index=True, left_index=True)
-
-merge = merge.apply(lambda col: col.map(lambda x: x.strip() if isinstance(x, str) else x))
-merge = merge.apply(lambda col: col.map(lambda x: re.sub(r'[-/()|.:;""'' ]', '_', x) if isinstance(x, str) else x))
-merge = merge.apply(lambda col: col.map(lambda x: x.replace("__", "_") if isinstance(x, str) else x))
-merge = merge.apply(lambda col: col.map(lambda x: x.replace('""', "") if isinstance(x, str) else x))
-merge = merge.apply(lambda col: col.map(lambda x: x.rstrip("_") if isinstance(x, str) else x))
-merge = merge.apply(lambda col: col.map(lambda x: x.lstrip("_") if isinstance(x, str) else x))
-
-merge["isolation_source"] = merge["isolation_source"].replace(np.nan, 'NoIsolationSource')
-merge["collection_date"] = merge["collection_date"].replace(np.nan, 'NoCollectionDate')
-merge["isolate"] = merge["isolate"].replace(np.nan, 'NoIsolate')
-merge["geo_loc_name"] = merge["geo_loc_name"].replace(np.nan, 'NoCountry')
-merge["host"] = merge["host"].replace(np.nan, 'NoHost')
-merge["mol_type"] = merge["mol_type"].replace(np.nan, 'NoMolType')
-merge["start"] = merge["start"].replace(np.nan, 'NoStartCoordinate')
-merge["end"] = merge["end"].replace(np.nan, 'NoEndCoordinate')
-merge["segment"] = merge["segment"].replace(np.nan, 'NoSegmentOrNotSegmented')
-
-merge["FastaID"]=merge.index + "|" + merge["isolate"] + "|" + merge[
-    "host"] + "|" + merge[
-    "isolation_source"] + "|" + merge[
-    "geo_loc_name"] + "|" + merge[
-    "segment"] + "|" + merge[
-    "collection_date"
-]
-        
-## make fasta 
-
-output_file = args.output_fasta
-
-# Open the file in write mode and iterate over DataFrame
-with open(output_file, 'w') as fasta_file:
+    handle.close()
     
-    for index, row in merge.iterrows():
-        header = '>' + row['FastaID']  # Create FASTA header
-        sequence = row['Sequence']    # Extract sequence
+    df_cds = pd.DataFrame(cds_list)
+    df_features = pd.DataFrame(feature_list)
+    
+    return df_cds, df_features
 
-        # Write header and sequence to the file
-        
-        fasta_file.write(header + '\n')
-        fasta_file.write(sequence + '\n')
+def clean_dataframe(df):
+    # Apply to each column, ensuring it applies to string columns only
+    df = df.apply(lambda col: col.map(lambda x: x.strip() if isinstance(x, str) else x))
+    df = df.apply(lambda col: col.map(lambda x: re.sub(r'[-/()|.:;""\' ]', '_', x) if isinstance(x, str) else x))
+    df = df.apply(lambda col: col.map(lambda x: x.replace("__", "_") if isinstance(x, str) else x))
+    df = df.apply(lambda col: col.map(lambda x: x.strip('_') if isinstance(x, str) else x))
+    return df
 
-        
-merge.to_csv(args.output_csv, sep=",")
+def fill_missing_data(df):
+    df.fillna({
+        "isolation_source": 'NoIsolationSource',
+        "collection_date": 'NoCollectionDate',
+        "isolate": 'NoIsolate',
+        "geo_loc_name": 'NoCountry',
+        "host": 'NoHost',
+        "mol_type": 'NoMolType',
+        "start": 'NoStartCoordinate',
+        "end": 'NoEndCoordinate',
+        "segment": 'NoSegmentOrNotSegmented'
+    }, inplace=True)
+    return df
+
+def create_fasta_headers(df):
+    df["FastaID"] = df.index + "|" + df["isolate"] + "|" + df["host"] + "|" + df["isolation_source"] + "|" + df["geo_loc_name"] + "|" + df["segment"] + "|" + df["collection_date"]
+    return df
+
+def process_accessions(accessions, output_fasta, output_csv):
+    # Fetch sequences and metadata
+    sequence_records = fetch_sequences(accessions)
+    df_unfiltered = create_sequence_dataframe(sequence_records)
+    
+    # Fetch CDS and metadata
+    df_cds, df_features = fetch_cds_and_metadata(accessions)
+    
+    # Merge DataFrames
+    df_unfiltered.set_index("Corrected_accession", inplace=True)
+    df_cds.set_index("Accession", inplace=True)
+    df_features.set_index("Accession", inplace=True)
+    
+    merged_df = pd.merge(df_unfiltered, df_cds, left_index=True, right_index=True)
+    merged_df = pd.merge(merged_df, df_features, left_index=True, right_index=True)
+    
+    # Clean and handle missing data
+    merged_df = clean_dataframe(merged_df)
+    merged_df = fill_missing_data(merged_df)
+    
+    # Create FASTA headers
+    merged_df = create_fasta_headers(merged_df)
+    
+    # Write FASTA file
+    with open(output_fasta, 'w') as fasta_file:
+        for _, row in merged_df.iterrows():
+            fasta_file.write(f">{row['FastaID']}\n{row['Sequence']}\n")
+    
+    # Write CSV file
+    merged_df.to_csv(output_csv, sep=",")
+
+
+if __name__ == "__main__":
+    # Retrieve accessions using the provided search query
+    accessions_out_noduplicates = get_accessions(query)
+
+    if not accessions_out_noduplicates:
+        print("No accessions found for the given search query.")
+    else:
+        process_accessions(accessions_out_noduplicates, args.output_fasta, args.output_csv)
+        print(f"Results written to {args.output_fasta} and {args.output_csv}")
