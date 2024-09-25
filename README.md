@@ -1,6 +1,6 @@
 # GenomicsTools
 
-A selection of tools for handlings genomics data / files from the last few years.. will be adding more :) 
+A selection of tools for genomics data
 
 - Retrieve_with_EaZeEeeee.py allows you to retrieve sequences and metadata as if you were searching on the ncbi search bar. outputs a fasta of all returned sequences and a csv file with metadata associated. 
 
